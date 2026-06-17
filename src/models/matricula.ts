@@ -1,4 +1,4 @@
-export interface Matricula {
+export interface Matricula  {
   id_matricula: number;
   id_vehiculo: number;
   id_estado: number;
