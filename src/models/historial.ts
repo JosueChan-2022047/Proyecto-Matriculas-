@@ -1,4 +1,4 @@
-export interface Historial {
+export interface Historial  {
   id_historial: number;
   id_matricula: number;
   id_usuario: number;
