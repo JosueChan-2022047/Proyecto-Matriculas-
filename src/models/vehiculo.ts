@@ -1,4 +1,4 @@
-export interface Vehiculo {
+export interface Vehiculo  {
   id_vehiculo: number;
   id_usuario: number;
   placa: string;
