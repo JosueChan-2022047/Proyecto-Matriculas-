@@ -1,4 +1,4 @@
-export interface Documento {
+export interface Documento  { 
   id_documento: number;
   id_matricula: number;
   tipo: string;
