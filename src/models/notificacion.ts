@@ -1,4 +1,4 @@
-export interface Notificacion {
+export interface Notificacion  {
   id_notif: number;
   id_usuario: number;
   id_matricula: number;
