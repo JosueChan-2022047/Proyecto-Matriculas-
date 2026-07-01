@@ -31,7 +31,6 @@ export function actualizarUsuario(
   if (indice === -1) {
     return null;
   }
-
   usuarios[indice] = {
     ...usuarios[indice],
     ...datosActualizados
@@ -46,7 +45,7 @@ export function eliminarUsuario(id_usuario: number): boolean {
   if (indice === -1) {
     return false;
   }
-
+ 
   usuarios.splice(indice, 1);
   return true;
 }

@@ -1,1 +1,3 @@
-console.log("Hola al backend")
+import { menuUsuario } from "./menu/menuUsuario";
+
+menuUsuario();
