@@ -1,3 +1,3 @@
-import { menuUsuario } from "./menu/menuUsuario";
+import { menuPrincipal } from "./menu/menuPrincipal";
 
-menuUsuario();
+menuPrincipal();
