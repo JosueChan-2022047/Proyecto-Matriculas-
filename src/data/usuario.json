@@ -1,0 +1,11 @@
+[
+  {
+    "id_usuario": 1,
+    "nombre": "Pablo",
+    "email": "pablo@gmail.com",
+    "telefono": "4715857",
+    "password": "789",
+    "rol": "admin",
+    "fecha_registro": "2026-07-22T17:12:04.587Z"
+  }
+]
