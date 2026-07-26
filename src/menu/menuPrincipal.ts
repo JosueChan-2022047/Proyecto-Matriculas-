@@ -14,7 +14,7 @@ function preguntar(pregunta: string): Promise<string> {
 
 export async function menuPrincipal() {
   while (true) {
-    console.log("\n===== GESTIÓN DE MATRÍCULAS VEHICULARES =====");
+    console.log("===== GESTIÓN DE MATRÍCULAS VEHICULARES =====");
     console.log("1. Iniciar sesión");
     console.log("2. Registrarse");
     console.log("3. Salir");
@@ -28,7 +28,7 @@ export async function menuPrincipal() {
     }
 
     if (opcionInicio === "2") {
-      console.log("\n--- REGISTRO DE USUARIO ---");
+      console.log("--- REGISTRO DE USUARIO ---");
       const nombre = await preguntar("Nombre: ");
       const email = await preguntar("Correo: ");
       const telefono = await preguntar("Teléfono: ");
@@ -45,7 +45,7 @@ export async function menuPrincipal() {
       const email = await preguntar("Correo: ");
       const password = await preguntar("Contraseña: ");
 
-      // Agregado 'await' para consultar a PostgreSQL
+    
       const usuario = await iniciarSesion(email, password);
 
       if (!usuario) {
@@ -53,16 +53,16 @@ export async function menuPrincipal() {
         continue;
       }
 
-      console.log(`\n¡Bienvenido/a ${usuario.nombre}!`);
+      console.log(`¡Bienvenido/a ${usuario.nombre}!`);
 
-      // Redirección según el rol registrado en PostgreSQL
+     
       if (usuario.rol === "admin") {
         await menuAdministrador(usuario, preguntar);
       } else {
         await menuUsuario(usuario, preguntar);
       }
     } else {
-      console.log("Opción inválida.\n");
+      console.log("Opción inválida.");
     }
   }
 }
