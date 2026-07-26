@@ -46,6 +46,14 @@ type VehiculoRegistro = Omit<Vehiculo, "id_vehiculo" | "fecha_registro">;
 export function crearVehiculo(
   vehiculo: VehiculoRegistro
 ): Vehiculo {
+    
+    const placaExiste = vehiculos.some(
+  v => v.placa.toUpperCase() === vehiculo.placa.toUpperCase()
+);
+
+if (placaExiste) {
+  throw new Error("La placa ya está registrada.");
+}
 
   const nuevoVehiculo: Vehiculo = {
     id_vehiculo: siguienteId++,
