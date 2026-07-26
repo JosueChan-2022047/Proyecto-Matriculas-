@@ -1,0 +1,13 @@
+[
+  {
+    "id_vehiculo": 1,
+    "placa": "101215121",
+    "modelo": "Toyota",
+    "color": "rojo",
+    "anio": 2012,
+    "id_usuario": 2,
+    "id_marca": 0,
+    "id_tipo": 0,
+    "fecha_registro": "2026-07-26T07:33:06.073Z"
+  }
+]

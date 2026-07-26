@@ -1,3 +1,9 @@
+import { probarConexion } from "./database/connection";
 import { menuPrincipal } from "./menu/menuPrincipal";
 
-menuPrincipal();
+async function main() {
+  await probarConexion();
+  await menuPrincipal();
+}
+
+main();
