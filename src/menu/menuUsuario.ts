@@ -1,79 +1,78 @@
-import readline from "readline";
-import {
-  crearUsuario,
-  listarUsuarios,
-  buscarUsuarioPorId,
-  actualizarUsuario,
-  eliminarUsuario
-} from "../services/usuarioService";
+import { Usuario } from "../models/usuario";
+import { crearVehiculo, buscarVehiculosPorUsuario } from "../services/vehiculoService";
+import { crearMatricula, buscarMatriculasPorVehiculo } from "../services/matriculaService";
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+export async function menuUsuario(
+  usuarioCliente: Usuario,
+  preguntar: (p: string) => Promise<string> 
+) {
+  let salirCliente = false;
 
-function preguntar(pregunta: string): Promise<string> {
-  return new Promise(resolve => rl.question(pregunta, resolve));
-}
-
-export async function menuUsuario() {
-  while (true) {
-    console.log("\n===== MENU USUARIO =====");
-    console.log("1. Crear usuario");
-    console.log("2. Listar usuarios");
-    console.log("3. Buscar usuario por ID");
-    console.log("4. Actualizar usuario");
-    console.log("5. Eliminar usuario");
-    console.log("6. Salir");
+  while (!salirCliente) {
+    console.log(`===== MENÚ CLIENTE (${usuarioCliente.nombre}) =====`);
+    console.log("1. Registrar mi vehículo");
+    console.log("2. Ver mis vehículos");
+    console.log("3. Solicitar matrícula");
+    console.log("4. Mis trámites / Estado de matrícula");
+    console.log("5. Cerrar sesión");
 
     const opcion = await preguntar("Elige una opción: ");
 
     switch (opcion) {
       case "1": {
-        const nombre = await preguntar("Nombre: ");
-        const email = await preguntar("Email: ");
-        const telefono = await preguntar("Teléfono: ");
-        const password = await preguntar("Password: ");
-        const rol = await preguntar("Rol: ");
-        const nuevo = crearUsuario({ nombre, email, telefono, password, rol });
-        console.log("Usuario creado:", nuevo);
+        console.log("--- REGISTRAR VEHÍCULO ---");
+        const placa = await preguntar("Placa: ");
+        const modelo = await preguntar("Modelo: ");
+        const color = await preguntar("Color: "); 
+        const anio = Number(await preguntar("Año: "));
+        const id_marca = Number(await preguntar("ID Marca: "));
+        const id_tipo = Number(await preguntar("ID Tipo Vehículo: "));
+
+        const nuevoVehiculo = crearVehiculo({  placa, modelo, color, anio,id_usuario: usuarioCliente.id_usuario,id_marca,id_tipo });
+
+        console.log("Vehículo registrado con éxito:", nuevoVehiculo);
         break;
       }
 
-      case "2":
-        console.log("Usuarios:", listarUsuarios());
+      case "2": {
+        console.log("\n--- MIS VEHÍCULOS ---");
+        const misVehiculos = buscarVehiculosPorUsuario(usuarioCliente.id_usuario);
+        console.log(misVehiculos.length > 0 ? misVehiculos : "No tienes vehículos registrados.");
         break;
+      }
 
       case "3": {
-        const id = Number(await preguntar("ID del usuario: "));
-        console.log(buscarUsuarioPorId(id) ?? "Usuario no encontrado");
+        console.log("--- SOLICITAR MATRÍCULA ---");
+        const id_vehiculo = Number(await preguntar("ID del vehículo a matricular: "));
+
+        
+        const nuevaMatricula = crearMatricula({
+          id_vehiculo,
+          id_estado: 1 
+        });
+
+        console.log("Solicitud de matrícula creada:", nuevaMatricula);
         break;
       }
 
       case "4": {
-        const id = Number(await preguntar("ID a actualizar: "));
-        const nombre = await preguntar("Nombre: ");
-        const email = await preguntar("Email: ");
-        const telefono = await preguntar("Teléfono: ");
-        const password = await preguntar("Password: ");
-        const rol = await preguntar("Rol: ");
-        console.log(actualizarUsuario(id, { nombre, email, telefono, password, rol }) ?? "Usuario no encontrado");
+        console.log("\n--- MIS TRÁMITES ---");
+        const misVehiculos = buscarVehiculosPorUsuario(usuarioCliente.id_usuario);
+        
+        for (const v of misVehiculos) {
+          const matriculas = buscarMatriculasPorVehiculo(v.id_vehiculo);
+          console.log(`Vehículo [${v.placa}]:`, matriculas);
+        }
         break;
       }
 
-      case "5": {
-        const id = Number(await preguntar("ID a eliminar: "));
-        console.log(eliminarUsuario(id) ? "Usuario eliminado" : "Usuario no encontrado");
+      case "5":
+        console.log("Cerrando sesión...");
+        salirCliente = true;
         break;
-      }
-
-      case "6":
-        console.log("Saliendo...");
-        rl.close();
-        return;
 
       default:
-        console.log("Opción inválida");
+        console.log("Opción inválida.");
     }
   }
 }
