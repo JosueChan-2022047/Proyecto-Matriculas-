@@ -1,10 +1,19 @@
-import mysql from "mysql2/promise";
+import { Pool } from "pg";
 
-export async function conectarDB() {
-  return await mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "?donmoA5m@",
-    database: "GestorDeMatriculasVehiculas_in5cm"
-  });
+export const pool = new Pool({
+  user: process.env.DB_USER ?? "postgres",
+  host: process.env.DB_HOST ?? "localhost",
+  database: process.env.DB_NAME ?? "gestordematriculasvehiculas_in5cm",
+  password: process.env.DB_PASSWORD ?? "KABITO2008", 
+  port: Number(process.env.DB_PORT ?? 5432),
+});
+
+export async function probarConexion() {
+  try {
+    const client = await pool.connect();
+    console.log(" Connectado exitosamente a PostgreSQL (gestordematriculasvehiculas_in5cm)");
+    client.release();
+  } catch (error) {
+    console.error(" Error al conectar a PostgreSQL:", error);
+  }
 }
