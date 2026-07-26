@@ -1,122 +1,79 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Usuario } from "../models/usuario";
 
-const rutaUsuariosJson =
-  process.env.USUARIO_JSON_PATH ??
-  path.resolve(__dirname, "../data/usuario.json");
+type UsuarioRegistro = Omit<Usuario, "id_usuario" | "fecha_registro">;
 
-const usuarios: Usuario[] = [];
-let siguienteId = 1;
+export async function crearUsuario(datos: UsuarioRegistro): Promise<Usuario> {
+  const query = `
+    INSERT INTO usuario (nombre, email, telefono, password, rol)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *;
+  `;
+  const values = [
+    datos.nombre,
+    datos.email,
+    datos.telefono,
+    datos.password,
+    datos.rol ?? 'usuario'
+  ];
 
-function cargarUsuariosDesdeJson() {
-  if (!fs.existsSync(rutaUsuariosJson)) {
-    fs.writeFileSync(rutaUsuariosJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaUsuariosJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaUsuariosJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Usuario[];
-
-  if (datos.length > 0) {
-    datos.forEach(usuario => usuarios.push(usuario));
-    siguienteId = Math.max(...datos.map(usuario => usuario.id_usuario), 0) + 1;
-  }
+  const resultado = await pool.query(query, values);
+  return resultado.rows[0];
 }
 
-function guardarUsuariosEnJson() {
-  fs.writeFileSync(
-    rutaUsuariosJson,
-    JSON.stringify(usuarios, null, 2),
-    "utf8"
-  );
-}
+export async function iniciarSesion(email: string, password: string): Promise<Usuario | null> {
+  const query = `SELECT * FROM usuario WHERE email = $1 AND password = $2;`;
+  const resultado = await pool.query(query, [email, password]);
 
-cargarUsuariosDesdeJson();
-
-type UsuarioRegistro = Omit<Usuario, "id_usuario" | "fecha_registro" | "rol">;
-
-export function crearUsuario(usuario: UsuarioRegistro): Usuario {
-  const nuevoUsuario: Usuario = {
-    id_usuario: siguienteId++,
-    ...usuario,
-    rol: "cliente",
-    fecha_registro: new Date()
-  };
-
-  usuarios.push(nuevoUsuario);
-  guardarUsuariosEnJson();
-  return nuevoUsuario;
-}
-
-export function listarUsuarios(): Usuario[] {
-  return usuarios;
-}
-
-export function buscarUsuarioPorId(id_usuario: number): Usuario | undefined {
-  return usuarios.find(usuario => usuario.id_usuario === id_usuario);
-}
-
-export function actualizarUsuario(
-  id_usuario: number,
-  datosActualizados: Omit<Usuario, "id_usuario" | "fecha_registro">
-): Usuario | null {
-  const indice = usuarios.findIndex(
-    usuario => usuario.id_usuario === id_usuario
-  );
-
-  if (indice === -1) {
+  if (resultado.rows.length === 0) {
     return null;
   }
 
-  usuarios[indice] = {
-    ...usuarios[indice],
-    ...datosActualizados
-  };
-
-  guardarUsuariosEnJson();
-  return usuarios[indice];
+  return resultado.rows[0];
 }
 
-export function eliminarUsuario(id_usuario: number): boolean {
-  const indice = usuarios.findIndex(
-    usuario => usuario.id_usuario === id_usuario
-  );
-
-  if (indice === -1) {
-    return false;
-  }
-
-  usuarios.splice(indice, 1);
-  guardarUsuariosEnJson();
-  return true;
+export async function listarUsuarios(): Promise<Usuario[]> {
+  const query = `SELECT * FROM usuario ORDER BY id_usuario ASC;`;
+  const resultado = await pool.query(query);
+  return resultado.rows;
 }
 
-export function iniciarSesion(
-  email: string,
-  password: string
-): Usuario | null {
-  return (
-    usuarios.find(
-      usuario =>
-        usuario.email === email &&
-        usuario.password === password
-    ) ?? null
-  );
+export async function buscarUsuarioPorId(id_usuario: number): Promise<Usuario | null> {
+  const query = `SELECT * FROM usuario WHERE id_usuario = $1;`;
+  const resultado = await pool.query(query, [id_usuario]);
+
+  return resultado.rows[0] ?? null;
 }
 
-export function multarUsuario(id_usuario: number): string {
-  const usuario = buscarUsuarioPorId(id_usuario);
+export async function actualizarUsuario(
+  id_usuario: number,
+  datos: Partial<UsuarioRegistro>
+): Promise<Usuario | null> {
+  const query = `
+    UPDATE usuario
+    SET nombre = COALESCE($1, nombre),
+        email = COALESCE($2, email),
+        telefono = COALESCE($3, telefono),
+        password = COALESCE($4, password),
+        rol = COALESCE($5, rol)
+    WHERE id_usuario = $6
+    RETURNING *;
+  `;
+  const values = [
+    datos.nombre ?? null,
+    datos.email ?? null,
+    datos.telefono ?? null,
+    datos.password ?? null,
+    datos.rol ?? null,
+    id_usuario
+  ];
 
-  if (!usuario) {
-    return "Usuario no encontrado";
-  }
+  const resultado = await pool.query(query, values);
+  return resultado.rows[0] ?? null;
+}
 
-  return `Se ha aplicado una multa al usuario ${usuario.nombre} (${usuario.email}).`;
+export async function eliminarUsuario(id_usuario: number): Promise<boolean> {
+  const query = `DELETE FROM usuario WHERE id_usuario = $1;`;
+  const resultado = await pool.query(query, [id_usuario]);
+  return (resultado.rowCount ?? 0) > 0;
 }
