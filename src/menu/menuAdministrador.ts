@@ -10,7 +10,7 @@ export async function menuAdministrador(
   let salirAdmin = false;
 
   while (!salirAdmin) {
-    console.log(`\n===== MENÚ ADMIN (${usuarioAdmin.nombre}) =====`);
+    console.log(`===== MENÚ ADMIN (${usuarioAdmin.nombre}) =====`);
     console.log("1. Listar todos los usuarios");
     console.log("2. Ver todas las solicitudes de matrícula");
     console.log("3. Actualizar estado de una matrícula");
@@ -22,17 +22,17 @@ export async function menuAdministrador(
 
     switch (opcion) {
       case "1":
-        console.log("\n--- USUARIOS REGISTRADOS ---");
+        console.log("--- USUARIOS REGISTRADOS ---");
         console.log(listarUsuarios());
         break;
 
       case "2":
-        console.log("\n--- TODAS LAS MATRÍCULAS ---");
+        console.log("--- TODAS LAS MATRÍCULAS ---");
         console.log(listarMatriculas());
         break;
 
       case "3": {
-        console.log("\n--- ACTUALIZAR MATRÍCULA ---");
+        console.log("--- ACTUALIZAR MATRÍCULA ---");
         const id_matricula = Number(await preguntar("ID de la matrícula: "));
         const id_estado = Number(await preguntar("Nuevo ID de estado (1: Pendiente, 2: Aprobada, 3: Rechazada): "));
         const id_vehiculo = Number(await preguntar("ID del vehículo asociado: "));
