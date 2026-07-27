@@ -1,9 +1,9 @@
 import { probarConexion } from "./database/connection";
-import { menuPrincipal } from "./menu/menuPrincipal";
+import { iniciarServidor } from "./api/server";
 
 async function main() {
   await probarConexion();
-  await menuPrincipal();
+  iniciarServidor();
 }
 
 main();
