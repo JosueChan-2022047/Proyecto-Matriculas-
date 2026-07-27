@@ -1,121 +1,140 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { TipoVehiculo } from "../models/tipoVehiculo";
-
-const rutaTiposJson =
-  process.env.TIPO_VEHICULO_JSON_PATH ??
-  path.resolve(__dirname, "../data/tipoVehiculo.json");
-
-const tiposVehiculo: TipoVehiculo[] = [];
-let siguienteId = 1;
-
-function cargarTiposVehiculoDesdeJson() {
-  if (!fs.existsSync(rutaTiposJson)) {
-    fs.writeFileSync(rutaTiposJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaTiposJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaTiposJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as TipoVehiculo[];
-
-  if (datos.length > 0) {
-    datos.forEach(tipo => tiposVehiculo.push(tipo));
-    siguienteId = Math.max(...datos.map(tipo => tipo.id_tipo), 0) + 1;
-  }
-}
-
-function guardarTiposVehiculoEnJson() {
-  fs.writeFileSync(
-    rutaTiposJson,
-    JSON.stringify(tiposVehiculo, null, 2),
-    "utf8"
-  );
-}
-
-cargarTiposVehiculoDesdeJson();
 
 type TipoVehiculoRegistro = Omit<TipoVehiculo, "id_tipo">;
 
-export function crearTipoVehiculo(
-  tipo: TipoVehiculoRegistro
-): TipoVehiculo {
+export async function crearTipoVehiculo(
+  datos: TipoVehiculoRegistro
+): Promise<TipoVehiculo> {
+  if (!datos.nombre || !datos.nombre.trim()) {
+    throw new Error("El nombre del tipo de vehículo es obligatorio.");
+  }
 
-  const existe = tiposVehiculo.some(
-    t => t.nombre.toLowerCase() === tipo.nombre.toLowerCase()
+  const tipoExistente = await pool.query(
+    `
+      SELECT id_tipo
+      FROM tipo_vehiculo
+      WHERE LOWER(nombre) = LOWER($1);
+    `,
+    [datos.nombre.trim()]
   );
 
-  if (existe) {
+  if ((tipoExistente.rowCount ?? 0) > 0) {
     throw new Error("El tipo de vehículo ya existe.");
   }
 
-  const nuevoTipo: TipoVehiculo = {
-    id_tipo: siguienteId++,
-    ...tipo
-  };
+  const resultado = await pool.query(
+    `
+      INSERT INTO tipo_vehiculo (
+        nombre,
+        descripcion
+      )
+      VALUES ($1, $2)
+      RETURNING *;
+    `,
+    [
+      datos.nombre.trim(),
+      datos.descripcion?.trim() || null
+    ]
+  );
 
-  tiposVehiculo.push(nuevoTipo);
-  guardarTiposVehiculoEnJson();
-
-  return nuevoTipo;
+  return resultado.rows[0];
 }
 
-export function listarTiposVehiculo(): TipoVehiculo[] {
-  return tiposVehiculo;
+export async function listarTiposVehiculo(): Promise<TipoVehiculo[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM tipo_vehiculo
+      ORDER BY id_tipo ASC;
+    `
+  );
+
+  return resultado.rows;
 }
 
-export function buscarTipoVehiculoPorId(
+export async function buscarTipoVehiculoPorId(
   id_tipo: number
-): TipoVehiculo | undefined {
-
-  return tiposVehiculo.find(
-    tipo => tipo.id_tipo === id_tipo
+): Promise<TipoVehiculo | null> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM tipo_vehiculo
+      WHERE id_tipo = $1;
+    `,
+    [id_tipo]
   );
+
+  return resultado.rows[0] ?? null;
 }
 
-export function actualizarTipoVehiculo(
+export async function actualizarTipoVehiculo(
   id_tipo: number,
-  datosActualizados: TipoVehiculoRegistro
-): TipoVehiculo | null {
+  datos: Partial<TipoVehiculoRegistro>
+): Promise<TipoVehiculo | null> {
+  const tipoActual = await buscarTipoVehiculoPorId(id_tipo);
 
-  const indice = tiposVehiculo.findIndex(
-    tipo => tipo.id_tipo === id_tipo
-  );
-
-  if (indice === -1) {
+  if (!tipoActual) {
     return null;
   }
 
-  tiposVehiculo[indice] = {
-    ...tiposVehiculo[indice],
-    ...datosActualizados
-  };
+  const nuevoNombre =
+    datos.nombre?.trim() ?? tipoActual.nombre;
 
-  guardarTiposVehiculoEnJson();
+  const nuevaDescripcion =
+    datos.descripcion !== undefined
+      ? datos.descripcion.trim() || null
+      : tipoActual.descripcion ?? null;
 
-  return tiposVehiculo[indice];
-}
-
-export function eliminarTipoVehiculo(
-  id_tipo: number
-): boolean {
-
-  const indice = tiposVehiculo.findIndex(
-    tipo => tipo.id_tipo === id_tipo
-  );
-
-  if (indice === -1) {
-    return false;
+  if (!nuevoNombre) {
+    throw new Error("El nombre del tipo de vehículo es obligatorio.");
   }
 
-  tiposVehiculo.splice(indice, 1);
+  const tipoDuplicado = await pool.query(
+    `
+      SELECT id_tipo
+      FROM tipo_vehiculo
+      WHERE LOWER(nombre) = LOWER($1)
+        AND id_tipo <> $2;
+    `,
+    [nuevoNombre, id_tipo]
+  );
 
-  guardarTiposVehiculoEnJson();
+  if ((tipoDuplicado.rowCount ?? 0) > 0) {
+    throw new Error(
+      "Ya existe otro tipo de vehículo con ese nombre."
+    );
+  }
 
-  return true;
+  const resultado = await pool.query(
+    `
+      UPDATE tipo_vehiculo
+      SET
+        nombre = $1,
+        descripcion = $2
+      WHERE id_tipo = $3
+      RETURNING *;
+    `,
+    [
+      nuevoNombre,
+      nuevaDescripcion,
+      id_tipo
+    ]
+  );
+
+  return resultado.rows[0] ?? null;
+}
+
+export async function eliminarTipoVehiculo(
+  id_tipo: number
+): Promise<boolean> {
+  const resultado = await pool.query(
+    `
+      DELETE FROM tipo_vehiculo
+      WHERE id_tipo = $1;
+    `,
+    [id_tipo]
+  );
+
+  return (resultado.rowCount ?? 0) > 0;
 }
