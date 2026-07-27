@@ -1,131 +1,149 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Historial } from "../models/historial";
 
-const rutaHistorialJson =
-  process.env.HISTORIAL_JSON_PATH ??
-  path.resolve(__dirname, "../data/historial.json");
+type HistorialRegistro = {
+  id_matricula: number;
+  id_usuario: number;
+  accion: string;
+  descripcion: string;
+  fecha: string;
+  valores_old?: string | null;
+  valores_new?: string | null;
+};
 
-const historiales: Historial[] = [];
-let siguienteId = 1;
-
-function cargarHistorialDesdeJson() {
-  if (!fs.existsSync(rutaHistorialJson)) {
-    fs.writeFileSync(rutaHistorialJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaHistorialJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaHistorialJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Historial[];
-
-  if (datos.length > 0) {
-    datos.forEach(historial => historiales.push(historial));
-    siguienteId =
-      Math.max(...datos.map(historial => historial.id_historial), 0) + 1;
-  }
-}
-
-function guardarHistorialEnJson() {
-  fs.writeFileSync(
-    rutaHistorialJson,
-    JSON.stringify(historiales, null, 2),
-    "utf8"
+export async function crearHistorial(
+  datos: HistorialRegistro
+): Promise<Historial> {
+  const resultado = await pool.query(
+    `
+      INSERT INTO historial (
+        id_matricula,
+        id_usuario,
+        accion,
+        descripcion,
+        fecha,
+        valores_old,
+        valores_new
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula,
+      datos.id_usuario,
+      datos.accion,
+      datos.descripcion,
+      datos.fecha,
+      datos.valores_old ?? null,
+      datos.valores_new ?? null
+    ]
   );
+
+  return resultado.rows[0];
 }
 
-cargarHistorialDesdeJson();
+export async function listarHistorial(): Promise<Historial[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM historial
+      ORDER BY id_historial ASC;
+    `
+  );
 
-type HistorialRegistro = Omit<Historial, "id_historial">;
-
-export function crearHistorial(
-  historial: HistorialRegistro
-): Historial {
-
-  const nuevoHistorial: Historial = {
-    id_historial: siguienteId++,
-    ...historial
-  };
-
-  historiales.push(nuevoHistorial);
-  guardarHistorialEnJson();
-
-  return nuevoHistorial;
+  return resultado.rows;
 }
 
-export function listarHistorial(): Historial[] {
-  return historiales;
-}
-
-export function buscarHistorialPorId(
+export async function buscarHistorialPorId(
   id_historial: number
-): Historial | undefined {
-
-  return historiales.find(
-    historial => historial.id_historial === id_historial
+): Promise<Historial | null> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM historial
+      WHERE id_historial = $1;
+    `,
+    [id_historial]
   );
+
+  return resultado.rows[0] ?? null;
 }
 
-export function buscarHistorialPorMatricula(
+export async function buscarHistorialPorMatricula(
   id_matricula: number
-): Historial[] {
-
-  return historiales.filter(
-    historial => historial.id_matricula === id_matricula
+): Promise<Historial[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM historial
+      WHERE id_matricula = $1
+      ORDER BY id_historial ASC;
+    `,
+    [id_matricula]
   );
+
+  return resultado.rows;
 }
 
-export function buscarHistorialPorUsuario(
+export async function buscarHistorialPorUsuario(
   id_usuario: number
-): Historial[] {
-
-  return historiales.filter(
-    historial => historial.id_usuario === id_usuario
+): Promise<Historial[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM historial
+      WHERE id_usuario = $1
+      ORDER BY id_historial ASC;
+    `,
+    [id_usuario]
   );
+
+  return resultado.rows;
 }
 
-export function actualizarHistorial(
+export async function actualizarHistorial(
   id_historial: number,
-  datosActualizados: HistorialRegistro
-): Historial | null {
-
-  const indice = historiales.findIndex(
-    historial => historial.id_historial === id_historial
+  datos: Partial<HistorialRegistro>
+): Promise<Historial | null> {
+  const resultado = await pool.query(
+    `
+      UPDATE historial
+      SET
+        id_matricula = COALESCE($1, id_matricula),
+        id_usuario = COALESCE($2, id_usuario),
+        accion = COALESCE($3, accion),
+        descripcion = COALESCE($4, descripcion),
+        fecha = COALESCE($5, fecha),
+        valores_old = COALESCE($6, valores_old),
+        valores_new = COALESCE($7, valores_new)
+      WHERE id_historial = $8
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula ?? null,
+      datos.id_usuario ?? null,
+      datos.accion ?? null,
+      datos.descripcion ?? null,
+      datos.fecha ?? null,
+      datos.valores_old ?? null,
+      datos.valores_new ?? null,
+      id_historial
+    ]
   );
 
-  if (indice === -1) {
-    return null;
-  }
-
-  historiales[indice] = {
-    ...historiales[indice],
-    ...datosActualizados
-  };
-
-  guardarHistorialEnJson();
-
-  return historiales[indice];
+  return resultado.rows[0] ?? null;
 }
 
-export function eliminarHistorial(
+export async function eliminarHistorial(
   id_historial: number
-): boolean {
-
-  const indice = historiales.findIndex(
-    historial => historial.id_historial === id_historial
+): Promise<boolean> {
+  const resultado = await pool.query(
+    `
+      DELETE FROM historial
+      WHERE id_historial = $1;
+    `,
+    [id_historial]
   );
 
-  if (indice === -1) {
-    return false;
-  }
-
-  historiales.splice(indice, 1);
-  guardarHistorialEnJson();
-
-  return true;
+  return (resultado.rowCount ?? 0) > 0;
 }
