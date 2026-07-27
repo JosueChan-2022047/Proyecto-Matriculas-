@@ -1,122 +1,123 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Documento } from "../models/documentos";
 
-const rutaDocumentosJson =
-  process.env.DOCUMENTO_JSON_PATH ??
-  path.resolve(__dirname, "../data/documentos.json");
+type DocumentoRegistro = {
+  id_matricula: number;
+  tipo: string;
+  contenido: string;
+  fecha: string;
+  estado: string;
+};
 
-const documentos: Documento[] = [];
-let siguienteId = 1;
-
-function cargarDocumentosDesdeJson() {
-  if (!fs.existsSync(rutaDocumentosJson)) {
-    fs.writeFileSync(rutaDocumentosJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaDocumentosJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaDocumentosJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Documento[];
-
-  if (datos.length > 0) {
-    datos.forEach(documento => documentos.push(documento));
-    siguienteId = Math.max(...datos.map(documento => documento.id_documento), 0) + 1;
-  }
-}
-
-function guardarDocumentosEnJson() {
-  fs.writeFileSync(
-    rutaDocumentosJson,
-    JSON.stringify(documentos, null, 2),
-    "utf8"
+export async function crearDocumento(
+  datos: DocumentoRegistro
+): Promise<Documento> {
+  const resultado = await pool.query(
+    `
+      INSERT INTO documento (
+        id_matricula,
+        tipo,
+        contenido,
+        fecha,
+        estado
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula,
+      datos.tipo,
+      datos.contenido,
+      datos.fecha,
+      datos.estado
+    ]
   );
+
+  return resultado.rows[0];
 }
 
-cargarDocumentosDesdeJson();
+export async function listarDocumentos(): Promise<Documento[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM documento
+      ORDER BY id_documento ASC;
+    `
+  );
 
-type DocumentoRegistro = Omit<Documento, "id_documento">;
-
-export function crearDocumento(
-  documento: DocumentoRegistro
-): Documento {
-
-  const nuevoDocumento: Documento = {
-    id_documento: siguienteId++,
-    ...documento
-  };
-
-  documentos.push(nuevoDocumento);
-  guardarDocumentosEnJson();
-
-  return nuevoDocumento;
+  return resultado.rows;
 }
 
-export function listarDocumentos(): Documento[] {
-  return documentos;
-}
-
-export function buscarDocumentoPorId(
+export async function buscarDocumentoPorId(
   id_documento: number
-): Documento | undefined {
-
-  return documentos.find(
-    documento => documento.id_documento === id_documento
+): Promise<Documento | null> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM documento
+      WHERE id_documento = $1;
+    `,
+    [id_documento]
   );
+
+  return resultado.rows[0] ?? null;
 }
 
-export function buscarDocumentosPorMatricula(
+export async function buscarDocumentosPorMatricula(
   id_matricula: number
-): Documento[] {
-
-  return documentos.filter(
-    documento => documento.id_matricula === id_matricula
+): Promise<Documento[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM documento
+      WHERE id_matricula = $1
+      ORDER BY id_documento ASC;
+    `,
+    [id_matricula]
   );
+
+  return resultado.rows;
 }
 
-export function actualizarDocumento(
+export async function actualizarDocumento(
   id_documento: number,
-  datosActualizados: DocumentoRegistro
-): Documento | null {
-
-  const indice = documentos.findIndex(
-    documento => documento.id_documento === id_documento
+  datos: Partial<DocumentoRegistro>
+): Promise<Documento | null> {
+  const resultado = await pool.query(
+    `
+      UPDATE documento
+      SET
+        id_matricula = COALESCE($1, id_matricula),
+        tipo = COALESCE($2, tipo),
+        contenido = COALESCE($3, contenido),
+        fecha = COALESCE($4, fecha),
+        estado = COALESCE($5, estado)
+      WHERE id_documento = $6
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula ?? null,
+      datos.tipo ?? null,
+      datos.contenido ?? null,
+      datos.fecha ?? null,
+      datos.estado ?? null,
+      id_documento
+    ]
   );
 
-  if (indice === -1) {
-    return null;
-  }
-
-  documentos[indice] = {
-    ...documentos[indice],
-    ...datosActualizados
-  };
-
-  guardarDocumentosEnJson();
-
-  return documentos[indice];
+  return resultado.rows[0] ?? null;
 }
 
-export function eliminarDocumento(
+export async function eliminarDocumento(
   id_documento: number
-): boolean {
-
-  const indice = documentos.findIndex(
-    documento => documento.id_documento === id_documento
+): Promise<boolean> {
+  const resultado = await pool.query(
+    `
+      DELETE FROM documento
+      WHERE id_documento = $1;
+    `,
+    [id_documento]
   );
 
-  if (indice === -1) {
-    return false;
-  }
-
-  documentos.splice(indice, 1);
-
-  guardarDocumentosEnJson();
-
-  return true;
+  return (resultado.rowCount ?? 0) > 0;
 }
