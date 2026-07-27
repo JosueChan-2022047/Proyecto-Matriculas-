@@ -8,6 +8,7 @@ import { matriculasRouter } from "./matriculasRouter";
 import { pagosRouter } from "./pagosRouter";
 import { documentosRouter } from "./documentosRouter";
 import { historialesRouter } from "./historialesRouter";
+import { notificacionesRouter } from "./notificacionesRouter";
 
 const PORT = 3000;
 
@@ -47,6 +48,10 @@ export function iniciarServidor() {
       }
 
       if (await historialesRouter(req, res)) {
+        return;
+      }
+
+      if (await notificacionesRouter(req, res)) {
         return;
       }
 
