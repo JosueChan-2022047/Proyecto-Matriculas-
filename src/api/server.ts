@@ -7,6 +7,7 @@ import { estadosMatriculaRouter } from "./estadosMatriculaRouter";
 import { matriculasRouter } from "./matriculasRouter";
 import { pagosRouter } from "./pagosRouter";
 import { documentosRouter } from "./documentosRouter";
+import { historialesRouter } from "./historialesRouter";
 
 const PORT = 3000;
 
@@ -45,13 +46,19 @@ export function iniciarServidor() {
         return;
       }
 
+      if (await historialesRouter(req, res)) {
+        return;
+      }
+
       res.writeHead(404, {
         "Content-Type": "application/json"
       });
 
-      res.end(JSON.stringify({
-        mensaje: "Ruta no encontrada"
-      }));
+      res.end(
+        JSON.stringify({
+          mensaje: "Ruta no encontrada"
+        })
+      );
     } catch (error) {
       console.error("Error en el servidor:", error);
 
@@ -61,9 +68,11 @@ export function iniciarServidor() {
         });
       }
 
-      res.end(JSON.stringify({
-        mensaje: "Error interno del servidor"
-      }));
+      res.end(
+        JSON.stringify({
+          mensaje: "Error interno del servidor"
+        })
+      );
     }
   });
 
