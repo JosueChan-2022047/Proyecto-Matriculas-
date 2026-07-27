@@ -1,132 +1,121 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Vehiculo } from "../models/vehiculo";
-
-const rutaVehiculosJson =
-  process.env.VEHICULO_JSON_PATH ??
-  path.resolve(__dirname, "../data/vehiculo.json");
-
-const vehiculos: Vehiculo[] = [];
-let siguienteId = 1;
-
-function cargarVehiculosDesdeJson() {
-  if (!fs.existsSync(rutaVehiculosJson)) {
-    fs.writeFileSync(rutaVehiculosJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaVehiculosJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaVehiculosJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Vehiculo[];
-
-  if (datos.length > 0) {
-    datos.forEach(vehiculo => vehiculos.push(vehiculo));
-    siguienteId =
-      Math.max(...datos.map(vehiculo => vehiculo.id_vehiculo), 0) + 1;
-  }
-}
-
-function guardarVehiculosEnJson() {
-  fs.writeFileSync(
-    rutaVehiculosJson,
-    JSON.stringify(vehiculos, null, 2),
-    "utf8"
-  );
-}
-
-cargarVehiculosDesdeJson();
 
 type VehiculoRegistro = Omit<Vehiculo, "id_vehiculo" | "fecha_registro">;
 
-export function crearVehiculo(
-  vehiculo: VehiculoRegistro
-): Vehiculo {
-    
-    const placaExiste = vehiculos.some(
-  v => v.placa.toUpperCase() === vehiculo.placa.toUpperCase()
-);
+export async function crearVehiculo(
+  datos: VehiculoRegistro
+): Promise<Vehiculo> {
 
-if (placaExiste) {
-  throw new Error("La placa ya está registrada.");
-}
-
-  const nuevoVehiculo: Vehiculo = {
-    id_vehiculo: siguienteId++,
-    ...vehiculo,
-    fecha_registro: new Date()
-  };
-
-  vehiculos.push(nuevoVehiculo);
-  guardarVehiculosEnJson();
-
-  return nuevoVehiculo;
-}
-
-export function listarVehiculos(): Vehiculo[] {
-  return vehiculos;
-}
-
-export function buscarVehiculoPorId(
-  id_vehiculo: number
-): Vehiculo | undefined {
-
-  return vehiculos.find(
-    vehiculo => vehiculo.id_vehiculo === id_vehiculo
-  );
-}
-
-export function actualizarVehiculo(
-  id_vehiculo: number,
-  datosActualizados: Omit<Vehiculo, "id_vehiculo" | "fecha_registro">
-): Vehiculo | null {
-
-  const indice = vehiculos.findIndex(
-    vehiculo => vehiculo.id_vehiculo === id_vehiculo
+  const placaExiste = await pool.query(
+    "SELECT 1 FROM vehiculo WHERE UPPER(placa)=UPPER($1)",
+    [datos.placa]
   );
 
-  if (indice === -1) {
-    return null;
+  if (placaExiste.rowCount) {
+    throw new Error("La placa ya está registrada.");
   }
 
-  vehiculos[indice] = {
-    ...vehiculos[indice],
-    ...datosActualizados
-  };
+  const query = `
+    INSERT INTO vehiculo
+    (id_usuario, placa, id_tipo, id_marca, modelo, anio, color)
+    VALUES ($1,$2,$3,$4,$5,$6,$7)
+    RETURNING *;
+  `;
 
-  guardarVehiculosEnJson();
+  const values = [
+    datos.id_usuario,
+    datos.placa,
+    datos.id_tipo,
+    datos.id_marca,
+    datos.modelo,
+    datos.anio,
+    datos.color
+  ];
 
-  return vehiculos[indice];
+  const resultado = await pool.query(query, values);
+
+  return resultado.rows[0];
 }
 
-export function eliminarVehiculo(
-  id_vehiculo: number
-): boolean {
+export async function listarVehiculos(): Promise<Vehiculo[]> {
 
-  const indice = vehiculos.findIndex(
-    vehiculo => vehiculo.id_vehiculo === id_vehiculo
+  const resultado = await pool.query(`
+    SELECT *
+    FROM vehiculo
+    ORDER BY id_vehiculo ASC;
+  `);
+
+  return resultado.rows;
+}
+
+export async function buscarVehiculoPorId(
+  id_vehiculo: number
+): Promise<Vehiculo | null> {
+
+  const resultado = await pool.query(
+    "SELECT * FROM vehiculo WHERE id_vehiculo=$1",
+    [id_vehiculo]
   );
 
-  if (indice === -1) {
-    return false;
-  }
-
-  vehiculos.splice(indice, 1);
-
-  guardarVehiculosEnJson();
-
-  return true;
+  return resultado.rows[0] ?? null;
 }
 
-export function buscarVehiculosPorUsuario(
+export async function buscarVehiculosPorUsuario(
   id_usuario: number
-): Vehiculo[] {
+): Promise<Vehiculo[]> {
 
-  return vehiculos.filter(
-    vehiculo => vehiculo.id_usuario === id_usuario
+  const resultado = await pool.query(
+    "SELECT * FROM vehiculo WHERE id_usuario=$1",
+    [id_usuario]
   );
+
+  return resultado.rows;
+}
+
+export async function actualizarVehiculo(
+  id_vehiculo: number,
+  datos: Partial<VehiculoRegistro>
+): Promise<Vehiculo | null> {
+
+  const query = `
+    UPDATE vehiculo
+    SET
+      id_usuario = COALESCE($1,id_usuario),
+      placa      = COALESCE($2,placa),
+      id_tipo    = COALESCE($3,id_tipo),
+      id_marca   = COALESCE($4,id_marca),
+      modelo     = COALESCE($5,modelo),
+      anio       = COALESCE($6,anio),
+      color      = COALESCE($7,color)
+    WHERE id_vehiculo=$8
+    RETURNING *;
+  `;
+
+  const values = [
+    datos.id_usuario ?? null,
+    datos.placa ?? null,
+    datos.id_tipo ?? null,
+    datos.id_marca ?? null,
+    datos.modelo ?? null,
+    datos.anio ?? null,
+    datos.color ?? null,
+    id_vehiculo
+  ];
+
+  const resultado = await pool.query(query, values);
+
+  return resultado.rows[0] ?? null;
+}
+
+export async function eliminarVehiculo(
+  id_vehiculo: number
+): Promise<boolean> {
+
+  const resultado = await pool.query(
+    "DELETE FROM vehiculo WHERE id_vehiculo=$1",
+    [id_vehiculo]
+  );
+
+  return (resultado.rowCount ?? 0) > 0;
 }
