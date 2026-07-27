@@ -1,123 +1,128 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Pago } from "../models/pago";
 
-const rutaPagosJson =
-  process.env.PAGO_JSON_PATH ??
-  path.resolve(__dirname, "../data/pago.json");
+type PagoRegistro = {
+  id_matricula: number;
+  monto: number;
+  fecha_pago: string;
+  metodo_pago: string;
+  estado: string;
+  transaccion?: string | null;
+};
 
-const pagos: Pago[] = [];
-let siguienteId = 1;
-
-function cargarPagosDesdeJson() {
-  if (!fs.existsSync(rutaPagosJson)) {
-    fs.writeFileSync(rutaPagosJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaPagosJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaPagosJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Pago[];
-
-  if (datos.length > 0) {
-    datos.forEach(pago => pagos.push(pago));
-    siguienteId =
-      Math.max(...datos.map(pago => pago.id_pago), 0) + 1;
-  }
-}
-
-function guardarPagosEnJson() {
-  fs.writeFileSync(
-    rutaPagosJson,
-    JSON.stringify(pagos, null, 2),
-    "utf8"
+export async function crearPago(
+  datos: PagoRegistro
+): Promise<Pago> {
+  const resultado = await pool.query(
+    `
+      INSERT INTO pago (
+        id_matricula,
+        monto,
+        fecha_pago,
+        metodo_pago,
+        estado,
+        transaccion
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula,
+      datos.monto,
+      datos.fecha_pago,
+      datos.metodo_pago,
+      datos.estado,
+      datos.transaccion ?? null
+    ]
   );
+
+  return resultado.rows[0];
 }
 
-cargarPagosDesdeJson();
+export async function listarPagos(): Promise<Pago[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM pago
+      ORDER BY id_pago ASC;
+    `
+  );
 
-type PagoRegistro = Omit<Pago, "id_pago">;
-
-export function crearPago(
-  pago: PagoRegistro
-): Pago {
-
-  const nuevoPago: Pago = {
-    id_pago: siguienteId++,
-    ...pago
-  };
-
-  pagos.push(nuevoPago);
-  guardarPagosEnJson();
-
-  return nuevoPago;
+  return resultado.rows;
 }
 
-export function listarPagos(): Pago[] {
-  return pagos;
-}
-
-export function buscarPagoPorId(
+export async function buscarPagoPorId(
   id_pago: number
-): Pago | undefined {
-
-  return pagos.find(
-    pago => pago.id_pago === id_pago
+): Promise<Pago | null> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM pago
+      WHERE id_pago = $1;
+    `,
+    [id_pago]
   );
+
+  return resultado.rows[0] ?? null;
 }
 
-export function buscarPagosPorMatricula(
+export async function buscarPagosPorMatricula(
   id_matricula: number
-): Pago[] {
-
-  return pagos.filter(
-    pago => pago.id_matricula === id_matricula
+): Promise<Pago[]> {
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM pago
+      WHERE id_matricula = $1
+      ORDER BY id_pago ASC;
+    `,
+    [id_matricula]
   );
+
+  return resultado.rows;
 }
 
-export function actualizarPago(
+export async function actualizarPago(
   id_pago: number,
-  datosActualizados: PagoRegistro
-): Pago | null {
-
-  const indice = pagos.findIndex(
-    pago => pago.id_pago === id_pago
+  datos: Partial<PagoRegistro>
+): Promise<Pago | null> {
+  const resultado = await pool.query(
+    `
+      UPDATE pago
+      SET
+        id_matricula = COALESCE($1, id_matricula),
+        monto = COALESCE($2, monto),
+        fecha_pago = COALESCE($3, fecha_pago),
+        metodo_pago = COALESCE($4, metodo_pago),
+        estado = COALESCE($5, estado),
+        transaccion = COALESCE($6, transaccion)
+      WHERE id_pago = $7
+      RETURNING *;
+    `,
+    [
+      datos.id_matricula ?? null,
+      datos.monto ?? null,
+      datos.fecha_pago ?? null,
+      datos.metodo_pago ?? null,
+      datos.estado ?? null,
+      datos.transaccion ?? null,
+      id_pago
+    ]
   );
 
-  if (indice === -1) {
-    return null;
-  }
-
-  pagos[indice] = {
-    ...pagos[indice],
-    ...datosActualizados
-  };
-
-  guardarPagosEnJson();
-
-  return pagos[indice];
+  return resultado.rows[0] ?? null;
 }
 
-export function eliminarPago(
+export async function eliminarPago(
   id_pago: number
-): boolean {
-
-  const indice = pagos.findIndex(
-    pago => pago.id_pago === id_pago
+): Promise<boolean> {
+  const resultado = await pool.query(
+    `
+      DELETE FROM pago
+      WHERE id_pago = $1;
+    `,
+    [id_pago]
   );
 
-  if (indice === -1) {
-    return false;
-  }
-
-  pagos.splice(indice, 1);
-
-  guardarPagosEnJson();
-
-  return true;
+  return (resultado.rowCount ?? 0) > 0;
 }
