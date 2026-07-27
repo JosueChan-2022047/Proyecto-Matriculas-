@@ -1,112 +1,125 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../database/connection";
 import { Marca } from "../models/marca";
-
-const rutaMarcasJson =
-  process.env.MARCA_JSON_PATH ??
-  path.resolve(__dirname, "../data/marca.json");
-
-const marcas: Marca[] = [];
-let siguienteId = 1;
-
-function cargarMarcasDesdeJson() {
-  if (!fs.existsSync(rutaMarcasJson)) {
-    fs.writeFileSync(rutaMarcasJson, "[]", "utf8");
-    return;
-  }
-
-  const contenido = fs.readFileSync(rutaMarcasJson, "utf8");
-
-  if (!contenido.trim()) {
-    fs.writeFileSync(rutaMarcasJson, "[]", "utf8");
-    return;
-  }
-
-  const datos = JSON.parse(contenido) as Marca[];
-
-  if (datos.length > 0) {
-    datos.forEach(marca => marcas.push(marca));
-    siguienteId = Math.max(...datos.map(marca => marca.id_marca), 0) + 1;
-  }
-}
-
-function guardarMarcasEnJson() {
-  fs.writeFileSync(
-    rutaMarcasJson,
-    JSON.stringify(marcas, null, 2),
-    "utf8"
-  );
-}
-
-cargarMarcasDesdeJson();
 
 type MarcaRegistro = Omit<Marca, "id_marca">;
 
-export function crearMarca(marca: MarcaRegistro): Marca {
+export async function crearMarca(
+  datos: MarcaRegistro
+): Promise<Marca> {
 
-  const existe = marcas.some(
-    m => m.nombre.toLowerCase() === marca.nombre.toLowerCase()
+  if (!datos.nombre || !datos.nombre.trim()) {
+    throw new Error("El nombre de la marca es obligatorio.");
+  }
+
+  const marcaExistente = await pool.query(
+    `
+      SELECT id_marca
+      FROM marca
+      WHERE LOWER(nombre) = LOWER($1)
+    `,
+    [datos.nombre.trim()]
   );
 
-  if (existe) {
+  if ((marcaExistente.rowCount ?? 0) > 0) {
     throw new Error("La marca ya existe.");
   }
 
-  const nuevaMarca: Marca = {
-    id_marca: siguienteId++,
-    ...marca
-  };
-
-  marcas.push(nuevaMarca);
-  guardarMarcasEnJson();
-
-  return nuevaMarca;
-}
-
-export function listarMarcas(): Marca[] {
-  return marcas;
-}
-
-export function buscarMarcaPorId(id_marca: number): Marca | undefined {
-  return marcas.find(marca => marca.id_marca === id_marca);
-}
-
-export function actualizarMarca(
-  id_marca: number,
-  datosActualizados: MarcaRegistro
-): Marca | null {
-
-  const indice = marcas.findIndex(
-    marca => marca.id_marca === id_marca
+  const resultado = await pool.query(
+    `
+      INSERT INTO marca (nombre)
+      VALUES ($1)
+      RETURNING *;
+    `,
+    [datos.nombre.trim()]
   );
 
-  if (indice === -1) {
+  return resultado.rows[0];
+}
+
+export async function listarMarcas(): Promise<Marca[]> {
+
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM marca
+      ORDER BY id_marca ASC;
+    `
+  );
+
+  return resultado.rows;
+}
+
+export async function buscarMarcaPorId(
+  id_marca: number
+): Promise<Marca | null> {
+
+  const resultado = await pool.query(
+    `
+      SELECT *
+      FROM marca
+      WHERE id_marca = $1;
+    `,
+    [id_marca]
+  );
+
+  return resultado.rows[0] ?? null;
+}
+
+export async function actualizarMarca(
+  id_marca: number,
+  datos: Partial<MarcaRegistro>
+): Promise<Marca | null> {
+
+  const marcaActual = await buscarMarcaPorId(id_marca);
+
+  if (!marcaActual) {
     return null;
   }
 
-  marcas[indice] = {
-    ...marcas[indice],
-    ...datosActualizados
-  };
+  const nuevoNombre = datos.nombre?.trim() ?? marcaActual.nombre;
 
-  guardarMarcasEnJson();
-
-  return marcas[indice];
-}
-
-export function eliminarMarca(id_marca: number): boolean {
-
-  const indice = marcas.findIndex(
-    marca => marca.id_marca === id_marca
-  );
-
-  if (indice === -1) {
-    return false;
+  if (!nuevoNombre) {
+    throw new Error("El nombre de la marca es obligatorio.");
   }
 
-  marcas.splice(indice, 1);
+  const marcaDuplicada = await pool.query(
+    `
+      SELECT id_marca
+      FROM marca
+      WHERE LOWER(nombre) = LOWER($1)
+        AND id_marca <> $2;
+    `,
+    [nuevoNombre, id_marca]
+  );
 
-  guardarMarcasEnJson();
+  if ((marcaDuplicada.rowCount ?? 0) > 0) {
+    throw new Error("Ya existe otra marca con ese nombre.");
+  }
 
-  return true;
+  const resultado = await pool.query(
+    `
+      UPDATE marca
+      SET nombre = $1
+      WHERE id_marca = $2
+      RETURNING *;
+    `,
+    [nuevoNombre, id_marca]
+  );
+
+  return resultado.rows[0] ?? null;
+}
+
+export async function eliminarMarca(
+  id_marca: number
+): Promise<boolean> {
+
+  const resultado = await pool.query(
+    `
+      DELETE FROM marca
+      WHERE id_marca = $1;
+    `,
+    [id_marca]
+  );
+
+  return (resultado.rowCount ?? 0) > 0;
 }
