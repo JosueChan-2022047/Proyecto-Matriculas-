@@ -5,6 +5,8 @@ export interface Matricula {
   fecha_inicio?: string;       
   fecha_vencimiento?: string;  
   monto?: number;              
-  fecha_pago?: string;         
+  fecha_pago?: string;   
+  comprobante?: string;     
+  notas?: string; 
  
 }
